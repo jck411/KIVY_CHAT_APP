@@ -13,7 +13,7 @@ import websockets
 from typing import Callable, Optional
 from enum import Enum
 
-from chat_ui.config import Config
+from chat_ui.core.config import Config
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
