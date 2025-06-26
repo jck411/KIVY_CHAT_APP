@@ -13,9 +13,9 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDFabButton
 from kivymd.uix.scrollview import MDScrollView
 
-from chat_ui.websocket_client import ChatWebSocketClient, ConnectionState
+from chat_ui.core.websocket_client import ChatWebSocketClient, ConnectionState
 from chat_ui.theme import Colors, Sizes, Spacing, Layout
-from chat_ui.config import Config, Messages
+from chat_ui.core.config import Config, Messages
 
 
 class ModernBubble(MDCard):
@@ -198,184 +198,173 @@ class ModernChatScreen(MDScreen):
         return header
     
     def _create_input_area(self):
-        """Create the input area with text field and send button"""
+        """Create the message input area with send button"""
         input_card = MDCard(
             theme_bg_color="Custom",  # Required for KivyMD 2.0+
             md_bg_color=Colors.WHITE,
-            elevation=3,
+            elevation=2,
             radius=[0],
             size_hint_y=None,
             height=Sizes.INPUT_HEIGHT,
-            padding=[Spacing.LARGE, Spacing.MEDIUM]
+            padding=Spacing.MEDIUM
         )
         
-        input_box = MDBoxLayout(
+        input_layout = MDBoxLayout(
             orientation="horizontal",
             spacing=Spacing.SMALL
         )
         
         self.text_input = MDTextField(
             hint_text="Type your message...",
-            mode="outlined",
-            font_size=Sizes.MESSAGE_FONT,
-            size_hint_y=None,
-            height=Sizes.BUTTON_SIZE,
-            radius=[dp(24)],
-            on_text_validate=self.send_message
+            multiline=False,
+            font_size=Sizes.INPUT_FONT,
+            size_hint_x=0.85
         )
+        self.text_input.bind(on_text_validate=self.send_message)
         
-        self.send_btn = MDFabButton(
+        send_button = MDFabButton(
             icon="send",
-            theme_bg_color="Custom",  # Required for KivyMD 2.0+
+            theme_icon_color="Custom",
+            icon_color=Colors.TEXT_LIGHT,
             md_bg_color=Colors.PRIMARY_BLUE,
-            size_hint=(None, None),
-            size=(Sizes.BUTTON_SIZE, Sizes.BUTTON_SIZE),
-            on_release=self.send_message
+            size_hint_x=0.15
         )
+        send_button.bind(on_release=self.send_message)
         
-        input_box.add_widget(self.text_input)
-        input_box.add_widget(self.send_btn)
-        input_card.add_widget(input_box)
+        input_layout.add_widget(self.text_input)
+        input_layout.add_widget(send_button)
+        input_card.add_widget(input_layout)
         
         return input_card
     
     def _scroll_to_bottom(self, force=False):
-        """Scroll to bottom with throttling for better performance"""
+        """Throttled scroll to bottom for smooth performance"""
         current_time = time.time()
         
         if force or (current_time - self._last_scroll_time) >= self._scroll_throttle_delay:
             self._do_scroll()
             self._last_scroll_time = current_time
-            
-            # Cancel any pending scroll
-            if self._pending_scroll_event:
-                self._pending_scroll_event.cancel()
-                self._pending_scroll_event = None
-            self._scroll_scheduled = False
-            
         elif not self._scroll_scheduled:
+            # Schedule a scroll for later if we're throttling
             self._scroll_scheduled = True
-            remaining_delay = self._scroll_throttle_delay - (current_time - self._last_scroll_time)
-            self._pending_scroll_event = Clock.schedule_once(self._do_throttled_scroll, remaining_delay)
+            self._pending_scroll_event = Clock.schedule_once(self._do_throttled_scroll, self._scroll_throttle_delay)
     
     def _do_scroll(self):
         """Perform the actual scroll operation"""
-        self.scroll_view.scroll_y = 0
+        if self.scroll_view:
+            self.scroll_view.scroll_y = 0  # Scroll to bottom
     
     def _do_throttled_scroll(self, dt):
-        """Perform scheduled throttled scroll"""
+        """Execute a throttled scroll operation"""
+        self._scroll_scheduled = False
         self._do_scroll()
         self._last_scroll_time = time.time()
-        self._scroll_scheduled = False
-        self._pending_scroll_event = None
     
     def _test_backend(self, dt):
-        """Test backend connection in background thread"""
-        thread = threading.Thread(target=self._threaded_test, daemon=True)
-        thread.start()
+        """Test if backend is available"""
+        threading.Thread(target=self._threaded_test, daemon=True).start()
     
     def _threaded_test(self):
-        """Test connection availability"""
+        """Test backend availability in a separate thread"""
         try:
-            connected = self.client.test_connection_sync()
-            self.backend_available = connected
-            
-            status_text = Messages.ONLINE if connected else Messages.DEMO_MODE
-            Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', status_text))
+            test_success = self.client.test_connection()
+            Clock.schedule_once(lambda dt: setattr(self, 'backend_available', test_success))
+            if test_success:
+                Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', Messages.ONLINE))
+            else:
+                Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', Messages.DEMO_MODE))
         except Exception:
             Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', Messages.DEMO_MODE))
     
     def _monitor_connection_state(self, dt):
-        """Monitor and update UI based on connection state"""
-        try:
-            state = self.client.get_connection_state()
+        """Monitor and update connection state"""
+        if hasattr(self.client, 'connection_state'):
+            state = self.client.connection_state
             
-            if state == ConnectionState.CONNECTED:
-                if not self.backend_available:
-                    self.backend_available = True
-                    self.status_label.text = Messages.ONLINE
-            elif state == ConnectionState.CONNECTING:
-                self.status_label.text = Messages.CONNECTING
-            elif state == ConnectionState.RECONNECTING:
-                self.status_label.text = Messages.RECONNECTING
-            elif state == ConnectionState.FAILED:
-                self.backend_available = False
-                self.status_label.text = Messages.CONNECTION_FAILED
-            elif state == ConnectionState.DISCONNECTED:
-                self.backend_available = False
-                self.status_label.text = Messages.DEMO_MODE
+            status_map = {
+                ConnectionState.DISCONNECTED: Messages.OFFLINE,
+                ConnectionState.CONNECTING: Messages.CONNECTING,
+                ConnectionState.CONNECTED: Messages.ONLINE,
+                ConnectionState.ERROR: Messages.CONNECTION_ERROR,
+                ConnectionState.RECONNECTING: Messages.RECONNECTING
+            }
+            
+            new_status = status_map.get(state, Messages.DEMO_MODE)
+            if self.status_label.text != new_status:
+                self.status_label.text = new_status
                 
-        except Exception:
-            # Fallback to demo mode
-            self.backend_available = False
+            # Update backend availability based on connection state
+            self.backend_available = (state == ConnectionState.CONNECTED)
+        
+        # Update demo mode status if backend is not available
+        elif not self.backend_available and self.status_label.text != Messages.DEMO_MODE:
             self.status_label.text = Messages.DEMO_MODE
     
     def send_message(self, instance):
-        """Handle message sending with backend or demo mode"""
-        text = self.text_input.text.strip()
-        if not text:
+        """Handle message sending with backend/demo mode logic"""
+        message_text = self.text_input.text.strip()
+        if not message_text:
             return
         
-        # Add user message
-        user_bubble = ModernBubble(text, is_user=True)
-        self.messages.add_widget(user_bubble)
+        # Clear input immediately for better UX
         self.text_input.text = ""
+        
+        # Add user message bubble
+        user_bubble = ModernBubble(message_text, is_user=True)
+        self.messages.add_widget(user_bubble)
+        self._scroll_to_bottom()
+        
+        # Clean up old messages if needed
         self._cleanup_old_messages()
-        self._scroll_to_bottom(force=True)
         
-        # Reset current bubble for new response
-        self.current_bubble = None
-        
+        # Send to backend or show demo response
         if self.backend_available:
-            self._send_to_backend(text)
+            self._send_to_backend(message_text)
         else:
-            self._show_demo_response(text)
+            self._show_demo_response(message_text)
     
     def _send_to_backend(self, message):
-        """Send message to backend in background thread"""
-        thread = threading.Thread(target=self._threaded_send, args=(message,), daemon=True)
-        thread.start()
+        """Send message to real backend"""
+        threading.Thread(target=self._threaded_send, args=(message,), daemon=True).start()
     
     def _show_demo_response(self, message):
-        """Show demo response when backend is unavailable"""
-        demo_bubble = ModernBubble(Messages.DEMO_RESPONSE.format(message=message))
-        self.messages.add_widget(demo_bubble)
-        self._scroll_to_bottom(force=True)
-        Clock.schedule_once(lambda dt: self._focus_input(), 0.5)
+        """Show a demo response when backend is unavailable"""
+        demo_text = f"Demo response to: '{message[:30]}{'...' if len(message) > 30 else ''}'"
+        ai_bubble = ModernBubble(demo_text)
+        self.messages.add_widget(ai_bubble)
+        self._scroll_to_bottom()
     
     def _threaded_send(self, message):
-        """Send message to backend with error handling"""
+        """Send message in separate thread"""
         try:
-            self.client.send_message_sync(message, self._on_chunk, self._on_message_complete)
+            self.client.send_message(message, self._on_chunk, self._on_message_complete)
         except Exception as e:
             error_msg = self._format_error_message(str(e))
             Clock.schedule_once(lambda dt: self._show_error_message(error_msg))
     
     def _show_error_message(self, error_msg):
-        """Show error message on main thread"""
-        try:
-            error_bubble = ModernBubble(f"❌ {error_msg}")
-            self.messages.add_widget(error_bubble)
-            self._scroll_to_bottom(force=True)
-            self._focus_input()
-        except Exception:
-            # Fallback to status update
-            self.status_label.text = f"❌ {error_msg[:30]}..."
+        """Display error message in chat"""
+        error_bubble = ModernBubble(f"❌ {error_msg}")
+        self.messages.add_widget(error_bubble)
+        self._scroll_to_bottom()
+        
+        # Also update status to show connection issues
+        self.status_label.text = Messages.CONNECTION_ERROR
+        self.backend_available = False
     
     def _format_error_message(self, error: str) -> str:
-        """Format error messages to be user-friendly"""
-        error_lower = error.lower()
-        if "timeout" in error_lower:
-            return Messages.TIMEOUT
-        elif "connection refused" in error_lower:
-            return Messages.CONNECTION_REFUSED
-        elif "failed after" in error_lower:
-            return Messages.MAX_RETRIES
+        """Format error message for user display"""
+        if "Connection refused" in error:
+            return "Cannot connect to server. Please check your connection."
+        elif "timeout" in error.lower():
+            return "Request timed out. Please try again."
+        elif "websocket" in error.lower():
+            return "Connection lost. Switching to demo mode."
         else:
-            return Messages.UNKNOWN_ERROR.format(error=error)
+            return "Something went wrong. Please try again."
     
     def _on_chunk(self, chunk):
-        """Handle incoming chunk with batching for better performance"""
+        """Handle streaming chunk - use batching for performance"""
         self._pending_chunks.append(chunk)
         
         if not self._text_update_scheduled:
@@ -383,46 +372,43 @@ class ModernChatScreen(MDScreen):
             Clock.schedule_once(self._process_batched_chunks, self._text_batch_delay)
     
     def _process_batched_chunks(self, dt):
-        """Process all pending chunks in a single UI update"""
-        if self._pending_chunks:
-            combined_text = ''.join(self._pending_chunks)
-            self._pending_chunks.clear()
-            self._append_chunk_batch(combined_text)
-            
+        """Process all pending chunks in a batch for better performance"""
+        if not self._pending_chunks:
+            self._text_update_scheduled = False
+            return
+        
+        # Combine all pending chunks
+        combined_text = ''.join(self._pending_chunks)
+        self._pending_chunks.clear()
+        
+        self._append_chunk_batch(combined_text)
         self._text_update_scheduled = False
     
     def _on_message_complete(self):
-        """Called when the assistant finishes responding"""
-        # Process any remaining chunks immediately
-        if self._pending_chunks:
-            combined_text = ''.join(self._pending_chunks)
-            self._pending_chunks.clear()
-            self._append_chunk_batch(combined_text)
-            self._text_update_scheduled = False
-        
+        """Handle message completion"""
+        self.current_bubble = None
         Clock.schedule_once(lambda dt: self._focus_input())
     
     def _focus_input(self):
-        """Focus the text input field"""
+        """Focus the input field for next message"""
         self.text_input.focus = True
     
     def _cleanup_old_messages(self):
-        """Remove old messages to prevent memory bloat during long conversations"""
+        """Remove old messages to prevent memory issues"""
         if len(self.messages.children) > self.max_messages:
+            # Remove oldest messages (they're at the end of children list due to how Kivy works)
             messages_to_remove = len(self.messages.children) - self.max_messages
             for _ in range(messages_to_remove):
-                oldest_message = self.messages.children[-1]
-                self.messages.remove_widget(oldest_message)
+                if self.messages.children:
+                    self.messages.remove_widget(self.messages.children[-1])
     
     def _append_chunk_batch(self, text):
-        """Append batched text to the current bubble with optimized scrolling"""
-        # Create bubble on first chunk
+        """Append a batch of text chunks to current message"""
         if not self.current_bubble:
-            self.current_bubble = ModernBubble(text)
+            self.current_bubble = ModernBubble("")
             self.messages.add_widget(self.current_bubble)
-            self._scroll_to_bottom(force=True)
-        else:
-            # Append to existing bubble
-            current_text = self.current_bubble.label.text
-            self.current_bubble.update_text(current_text + text)
-            self._scroll_to_bottom() 
+        
+        # Update the bubble text
+        current_text = self.current_bubble.label.text
+        self.current_bubble.update_text(current_text + text)
+        self._scroll_to_bottom() 
