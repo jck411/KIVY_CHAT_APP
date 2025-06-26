@@ -207,3 +207,121 @@ This application is designed for production use with:
 ---
 
 Built with ❤️ using modern Python practices and Material Design principles. 
+
+---
+
+# 🔧 Project Refactoring Plan
+
+## Developer-Friendly Structure Migration
+
+This section outlines the step-by-step refactoring plan to transform the current structure into a more modular, developer-friendly layout ready for both desktop Linux and Android deployment.
+
+### 📋 Refactoring Checklist
+
+- [ ] **1. Create New "refactor" Branch**
+  - Create branch: `git checkout -b refactor/project-layout`
+  - Push to GitHub for team review
+
+- [ ] **2. Define Target Layout**
+  - Plan new directory structure:
+    ```
+    KIVY_CHAT_APP/
+    ├── chat_ui/                     # Main Python package
+    │   ├── __init__.py
+    │   ├── app.py                   # App subclass + entry point
+    │   ├── screens/                 # Individual Screen classes
+    │   ├── ui/                      # KV files & custom widgets
+    │   └── core/                    # WebSockets, config, utilities
+    │
+    ├── assets/                      # Icons, fonts, other static files
+    │   ├── icons/
+    │   └── fonts/
+    │
+    ├── main.py                      # launcher: imports and runs chat_ui.app
+    ├── pyproject.toml               # metadata + build-system (swap to setuptools)
+    ├── buildozer.spec               # Android config (add later)
+    └── README.md
+    ```
+
+- [ ] **3. Scaffold New Directories**
+  - Create empty folders (`screens/`, `ui/kv/`, `ui/widgets/`, `core/`, `assets/icons`, `assets/fonts`)
+  - Add placeholder `__init__.py` files in each Python package
+
+- [ ] **4. Move Code into Modules**
+  - **App & Entry Point:**
+    - Move KivyMDApp subclass to `chat_ui/app.py`
+    - Simplify `main.py` to launcher only
+  - **Screens:**
+    - Move screen classes to `chat_ui/screens/`
+    - Update imports accordingly
+  - **Core Logic:**
+    - Move WebSocket client, config, helpers to `chat_ui/core/`
+  - **UI Assets:**
+    - Move `.kv` files to `chat_ui/ui/kv/`
+    - Custom widgets to `chat_ui/ui/widgets/`
+
+- [ ] **5. Update Imports & KV Loading**
+  - Fix all import paths for new structure
+  - Update KV file loading with explicit paths:
+    ```python
+    from kivy.lang import Builder
+    Builder.load_file("chat_ui/ui/kv/main.kv")
+    ```
+  - Search and replace old paths in IDE
+
+- [ ] **6. Migrate Build System to Setuptools**
+  - Update `pyproject.toml`:
+    ```toml
+    [build-system]
+    requires = ["setuptools>=65.0", "wheel"]
+    build-backend = "setuptools.build_meta"
+    ```
+  - Remove `tool.hatch` section
+  - Add minimal `setup.cfg` if needed
+
+- [ ] **7. Verify Desktop Workflow**
+  - Install locally: `uv pip install -e .`
+  - Run app: `python main.py`
+  - Test all screens, WebSocket logic, theming
+
+- [ ] **8. Add Android Support with Buildozer**
+  - Initialize: `buildozer init`
+  - Configure `buildozer.spec`:
+    - `source.include_exts = py,kv,ttf,otf,png,jpg`
+    - `package.name = KivyChatApp`
+    - `requirements = python3,kivy==2.3.1,kivymd==1.2.0,websockets`
+    - `entrypoint = main.py`
+  - Organize assets under `assets/` for bundling
+
+- [ ] **9. Test on Android Emulator / Device**
+  - Run: `buildozer android debug deploy run`
+  - Smoke-test screens, WebSocket connection, theming
+
+- [ ] **10. Set Up CI & Documentation**
+  - **CI (GitHub Actions):**
+    - Lint on each PR (`ruff --strict`)
+    - Type checking (`mypy --strict`)
+    - Basic smoke-test: `python main.py --headless`
+  - **Update README:**
+    - Document new structure
+    - Add "Getting Started" for desktop and Android
+
+- [ ] **11. Review & Merge**
+  - Open PR against `main`
+  - Team review: directory layout, import correctness, Android testing
+  - Merge and delete `refactor/*` branch
+
+### 🎯 Benefits of This Refactoring
+
+- **Clear Separation of Concerns:** UI vs. core logic
+- **Easy Packaging & Distribution:** Both Linux & Android ready
+- **Scalable Architecture:** Clean addition of new screens, widgets, platforms
+- **Developer Experience:** Intuitive structure, easy navigation
+- **Production Ready:** CI integration, proper testing setup
+
+### 📝 Notes
+
+- **Package Management:** Continue using `uv` for all dependency management
+- **Python Version:** Target Python 3.13.0-alpha as per project standards
+- **Testing:** Maintain ≥90% line coverage with `pytest`
+- **Performance:** Keep existing SLO targets (P95 latency ≤ 100ms) 
