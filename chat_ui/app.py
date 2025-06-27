@@ -12,6 +12,7 @@ from kivy.config import Config as KivyConfig
 from kivymd.app import MDApp
 
 from chat_ui.core.config import Config
+from chat_ui.core.mobile_config import MobileConfig
 from chat_ui.screens.chat_screen import ModernChatScreen
 
 # Configure environment variables before any Kivy imports
@@ -54,11 +55,13 @@ def configure_logging():
 
 def configure_kivy():
     """Configure Kivy settings for optimal performance and reduced warnings"""
-    # Window settings
-    KivyConfig.set('graphics', 'width', str(Config.WINDOW_WIDTH))
-    KivyConfig.set('graphics', 'height', str(Config.WINDOW_HEIGHT))
-    KivyConfig.set('graphics', 'minimum_width', str(Config.MIN_WIDTH))
-    KivyConfig.set('graphics', 'minimum_height', str(Config.MIN_HEIGHT))
+    # Window settings (only for desktop)
+    width, height = MobileConfig.get_window_size()
+    if width and height:  # Desktop only
+        KivyConfig.set('graphics', 'width', str(width))
+        KivyConfig.set('graphics', 'height', str(height))
+        KivyConfig.set('graphics', 'minimum_width', str(Config.MIN_WIDTH))
+        KivyConfig.set('graphics', 'minimum_height', str(Config.MIN_HEIGHT))
     
     # Performance optimizations
     KivyConfig.set('kivy', 'log_level', 'critical')  # Only critical errors
@@ -77,6 +80,7 @@ def configure_kivy():
 # Configure everything before imports
 configure_logging()
 configure_kivy()
+MobileConfig.configure_for_mobile()
 
 # Additional Kivy logger configuration after imports
 from kivy import Logger as KivyLogger

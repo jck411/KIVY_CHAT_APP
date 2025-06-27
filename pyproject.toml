@@ -10,7 +10,7 @@ dependencies = [
     "kivy~=2.3.1",
     "websockets~=13.1",
 ]
-requires-python = ">=3.13.0a"
+requires-python = ">=3.10.0,<3.11"
 readme = "README.md"
 license = "MIT"
 
