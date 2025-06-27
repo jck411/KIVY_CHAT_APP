@@ -1,0 +1,23 @@
+repos:
+  # Style, import-sort, correctness lints
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix, --strict]
+
+  # Static typing
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: [--strict]
+
+  # Quick test slice on push
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (fast)
+        entry: python -m pytest -q
+        language: system
+        stages: [push]   # run only on git push

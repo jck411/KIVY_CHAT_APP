@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+**UV Package Management & Execution**
+- Use **uv exclusively** for all Python operations: `uv add/remove/sync` for dependencies, `uv run` for execution, `uv venv` for environments; **never** use pip, pipx, poetry, conda, or python -m.
+- Execute scripts via `uv run module:main` or `uv run script.py`—avoid `python -m module` or direct python execution that bypasses uv's resolver.
+- Manage dependencies in `pyproject.toml` with caret ranges (`^1.2.3`); use `uv add --dev` for development dependencies and `uv sync` for lockfile updates.
+- Pin exact Python versions (`python = "==3.13.0a6"`) to prevent ABI drift; update monthly with `uv python install 3.13.0a7 && uv sync`.
+- **Never** create requirements.txt files or use `pip install -r`—uv handles everything through pyproject.toml and uv.lock for reproducible builds.
+
+
+**WebSocket Streaming & Real-time Communication**
+- Maintain **persistent WebSocket connections** with dedicated background threads; never create new connections per message or operation.
+- Process streaming chunks **immediately upon arrival**—eliminate all artificial batching delays, buffering, or scheduled processing that adds latency.
+- Use direct UI updates via thread-safe mechanisms (Qt signals, Kivy Clock.schedule_once, React setState); avoid complex batching systems that cause race conditions.
+- Configure connections with compression (`deflate`), appropriate timeouts (`ping_interval: 20s`, `ping_timeout: 10s`), and exponential backoff reconnection logic.
+- **Never** add artificial delays to "smooth" streaming—modern frameworks handle real-time updates efficiently when unbuffered.
