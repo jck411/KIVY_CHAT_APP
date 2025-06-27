@@ -8,7 +8,7 @@ from kivy.metrics import dp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
-from kivymd.uix.label import MDLabel
+from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDFabButton
 from kivymd.uix.scrollview import MDScrollView
@@ -23,23 +23,23 @@ class ModernBubble(MDCard):
     
     def __init__(self, text, is_user=False, **kwargs):
         super().__init__(**kwargs)
-        self.elevation = 0 if is_user else 1
-        self.radius = [Sizes.BUBBLE_RADIUS]
+        self.elevation = 2 if is_user else 1
+        self.radius = [dp(18), dp(18), dp(4) if is_user else dp(18), dp(18) if is_user else dp(4)]
         self.size_hint_y = None
         self.adaptive_height = True
-        self.padding = [Spacing.MEDIUM, Spacing.SMALL]
+        self.padding = [dp(16), dp(12)]
         
         if is_user:
             self.theme_bg_color = "Custom"  # Required for KivyMD 2.0+
             self.md_bg_color = Colors.PRIMARY_BLUE
-            self.pos_hint = Layout.USER_BUBBLE_POS
-            self.size_hint_x = Layout.USER_BUBBLE_WIDTH
+            self.pos_hint = {"right": 0.95}
+            self.size_hint_x = 0.75
             text_color = Colors.TEXT_LIGHT
         else:
             self.theme_bg_color = "Custom"  # Required for KivyMD 2.0+
             self.md_bg_color = Colors.LIGHT_GRAY
-            self.pos_hint = Layout.AI_BUBBLE_POS
-            self.size_hint_x = Layout.AI_BUBBLE_WIDTH
+            self.pos_hint = {"x": 0.05}
+            self.size_hint_x = 0.8
             text_color = Colors.TEXT_DARK
         
         self.label = MDLabel(
@@ -48,8 +48,9 @@ class ModernBubble(MDCard):
             text_color=text_color,
             font_size=Sizes.MESSAGE_FONT,
             adaptive_height=True,
-            text_size=(dp(300), None),
-            markup=True
+            text_size=(None, None),
+            markup=True,
+            valign="middle"
         )
         self.add_widget(self.label)
     
@@ -83,11 +84,6 @@ class ModernChatScreen(MDScreen):
         self._pending_scroll_event = None
         self._last_scroll_time = 0
         self._scroll_throttle_delay = Config.SCROLL_THROTTLE_MS / 1000.0
-        
-        # Text batching for streaming optimization
-        self._pending_chunks = []
-        self._text_update_scheduled = False
-        self._text_batch_delay = Config.TEXT_BATCH_MS / 1000.0
         
         # Memory management
         self.max_messages = Config.MAX_MESSAGE_HISTORY
@@ -160,14 +156,27 @@ class ModernChatScreen(MDScreen):
             spacing=Spacing.SMALL
         )
         
-        # Avatar
+        # Avatar with icon
         avatar = MDCard(
             theme_bg_color="Custom",  # Required for KivyMD 2.0+
             md_bg_color=Colors.PRIMARY_BLUE,
             size_hint=(None, None),
             size=(Sizes.AVATAR_SIZE, Sizes.AVATAR_SIZE),
-            radius=[Sizes.BUBBLE_RADIUS]
+            radius=[Sizes.AVATAR_SIZE / 2]  # Circular avatar
         )
+        
+        # Add AI icon to the avatar
+        avatar_icon = MDIcon(
+            icon="robot",
+            theme_icon_color="Custom",
+            icon_color=Colors.TEXT_LIGHT,
+            halign="center",
+            valign="center",
+            size_hint=(None, None),
+            size=(Sizes.AVATAR_SIZE - dp(8), Sizes.AVATAR_SIZE - dp(8)),
+            font_size=dp(20)
+        )
+        avatar.add_widget(avatar_icon)
         
         # Title and status
         title_box = MDBoxLayout(orientation="vertical")
@@ -218,16 +227,22 @@ class ModernChatScreen(MDScreen):
             hint_text="Type your message...",
             multiline=False,
             font_size=Sizes.INPUT_FONT,
-            size_hint_x=0.85
+            mode="outlined",
+            size_hint_x=0.8,
+            pos_hint={"center_y": 0.5}
         )
         self.text_input.bind(on_text_validate=self.send_message)
         
         send_button = MDFabButton(
             icon="send",
+            style="standard",
             theme_icon_color="Custom",
             icon_color=Colors.TEXT_LIGHT,
+            theme_bg_color="Custom",
             md_bg_color=Colors.PRIMARY_BLUE,
-            size_hint_x=0.15
+            size_hint=(None, None),
+            size=(dp(48), dp(48)),
+            pos_hint={"center_y": 0.5}
         )
         send_button.bind(on_release=self.send_message)
         
@@ -267,7 +282,7 @@ class ModernChatScreen(MDScreen):
     def _threaded_test(self):
         """Test backend availability in a separate thread"""
         try:
-            test_success = self.client.test_connection()
+            test_success = self.client.test_connection_sync()
             Clock.schedule_once(lambda dt: setattr(self, 'backend_available', test_success))
             if test_success:
                 Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', Messages.ONLINE))
@@ -278,14 +293,14 @@ class ModernChatScreen(MDScreen):
     
     def _monitor_connection_state(self, dt):
         """Monitor and update connection state"""
-        if hasattr(self.client, 'connection_state'):
-            state = self.client.connection_state
+        if hasattr(self.client, 'get_connection_state'):
+            state = self.client.get_connection_state()
             
             status_map = {
                 ConnectionState.DISCONNECTED: Messages.OFFLINE,
                 ConnectionState.CONNECTING: Messages.CONNECTING,
                 ConnectionState.CONNECTED: Messages.ONLINE,
-                ConnectionState.ERROR: Messages.CONNECTION_ERROR,
+                ConnectionState.FAILED: Messages.CONNECTION_ERROR,
                 ConnectionState.RECONNECTING: Messages.RECONNECTING
             }
             
@@ -337,7 +352,7 @@ class ModernChatScreen(MDScreen):
     def _threaded_send(self, message):
         """Send message in separate thread"""
         try:
-            self.client.send_message(message, self._on_chunk, self._on_message_complete)
+            self.client.send_message_sync(message, self._on_chunk, self._on_message_complete)
         except Exception as e:
             error_msg = self._format_error_message(str(e))
             Clock.schedule_once(lambda dt: self._show_error_message(error_msg))
@@ -364,30 +379,28 @@ class ModernChatScreen(MDScreen):
             return "Something went wrong. Please try again."
     
     def _on_chunk(self, chunk):
-        """Handle streaming chunk - use batching for performance"""
-        self._pending_chunks.append(chunk)
+        """Handle streaming chunk - direct update for proper ordering"""
+        def update_bubble():
+            # Create bubble for first chunk
+            if not self.current_bubble:
+                self.current_bubble = ModernBubble("", is_user=False)
+                self.messages.add_widget(self.current_bubble)
+            
+            # Append chunk to current bubble
+            current_text = self.current_bubble.label.text
+            self.current_bubble.update_text(current_text + chunk)
+            self._scroll_to_bottom()
         
-        if not self._text_update_scheduled:
-            self._text_update_scheduled = True
-            Clock.schedule_once(self._process_batched_chunks, self._text_batch_delay)
-    
-    def _process_batched_chunks(self, dt):
-        """Process all pending chunks in a batch for better performance"""
-        if not self._pending_chunks:
-            self._text_update_scheduled = False
-            return
-        
-        # Combine all pending chunks
-        combined_text = ''.join(self._pending_chunks)
-        self._pending_chunks.clear()
-        
-        self._append_chunk_batch(combined_text)
-        self._text_update_scheduled = False
+        # Schedule update on main thread
+        Clock.schedule_once(lambda dt: update_bubble())
     
     def _on_message_complete(self):
         """Handle message completion"""
-        self.current_bubble = None
-        Clock.schedule_once(lambda dt: self._focus_input())
+        def complete_message():
+            self.current_bubble = None
+            self.text_input.focus = True
+        
+        Clock.schedule_once(lambda dt: complete_message())
     
     def _focus_input(self):
         """Focus the input field for next message"""
@@ -400,15 +413,4 @@ class ModernChatScreen(MDScreen):
             messages_to_remove = len(self.messages.children) - self.max_messages
             for _ in range(messages_to_remove):
                 if self.messages.children:
-                    self.messages.remove_widget(self.messages.children[-1])
-    
-    def _append_chunk_batch(self, text):
-        """Append a batch of text chunks to current message"""
-        if not self.current_bubble:
-            self.current_bubble = ModernBubble("")
-            self.messages.add_widget(self.current_bubble)
-        
-        # Update the bubble text
-        current_text = self.current_bubble.label.text
-        self.current_bubble.update_text(current_text + text)
-        self._scroll_to_bottom() 
+                    self.messages.remove_widget(self.messages.children[-1]) 

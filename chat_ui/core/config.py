@@ -44,6 +44,8 @@ class Messages:
     RECONNECTING = "🔄 Reconnecting..."
     DEMO_MODE = "🔴 Demo Mode"
     CONNECTION_FAILED = "❌ Connection Failed"
+    OFFLINE = "⚫ Offline"
+    CONNECTION_ERROR = "❌ Connection Error"
     
     # Error messages
     TIMEOUT = "Connection timeout. Please check your network and try again."
