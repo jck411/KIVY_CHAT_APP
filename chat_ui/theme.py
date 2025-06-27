@@ -45,6 +45,7 @@ class Sizes:
     TITLE_FONT = "18sp"
     STATUS_FONT = "14sp"
     MESSAGE_FONT = "16sp"
+    INPUT_FONT = "16sp"
 
 
 class Spacing:
