@@ -322,4 +322,5 @@ This section outlines the step-by-step refactoring plan to transform the current
 - **Package Management:** Continue using `uv` for all dependency management
 - **Python Version:** Target Python 3.13.0-alpha as per project standards
 - **Testing:** Maintain ≥90% line coverage with `pytest`
-- **Performance:** Keep existing SLO targets (P95 latency ≤ 100ms) 
+- **Performance:** Keep existing SLO targets (P95 latency ≤ 100ms)
+ 
