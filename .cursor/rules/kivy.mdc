@@ -1,0 +1,90 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+ # 🛠️ Development Rules
+
+This document outlines the timeless development rules and standards that apply to this project.
+
+## 🐍 Language & Dependencies
+
+* Pin one exact Python interpreter version (e.g. `3.13.0`) and use it everywhere (CI, dev, staging, prod).
+* Never mix interpreters across environments.
+
+## 📅 Date-Aware Dependency Management
+
+### Current Date
+The assistant always knows "today" in ISO format (`YYYY-MM-DD`).
+
+### Version Lookup & Installation
+1. **Echo** the current date.
+2. Query PyPI for the newest release published **on or before** today.
+3. Install with `uv add <package>@<exact-version>`
+4. In `pyproject.toml`:
+   * Stable releases → `^<version>`
+   * Prereleases (alpha, beta, RC) → `==<version>`
+5. Never invoke `pip`, `poetry`, or `conda` directly.
+
+## ⚡ Async, Concurrency & Event-Driven Design
+
+* Prefer event-driven patterns (async tasks, callbacks, pub/sub) over polling.
+* Default to **asyncio / anyio** for external I/O > 10 ms; never block the event loop.
+* Guard long ops with `async with timeout()` only when the call can exceed the I/O SLO; raise `TimeoutError`.
+* Shield critical sections and never swallow `CancelledError`.
+
+## 📁 Code Organisation & Style
+
+* One public class/function per file once the file exceeds **150 LOC** *and* has ≥ 2 public symbols. **Soft cap:** 300 LOC.
+* Remove legacy code instead of adding compatibility layers.
+* Reuse existing abstractions; eliminate copy-paste duplication; Avoid catch-all "god classes" (e.g. manager, utils, misc). Focused classes like ConnectionManager, AudioController are fine.
+* Keep the repo tidy—no throw-away scripts.
+* Import order: **stdlib → third-party → internal**.
+
+## 🔒 Security
+
+* Never commit or overwrite `.env`; read secrets via `os.getenv`.
+* Never log tokens, secrets, or PII.
+
+## 🧪 Testing
+
+* `pytest`, `pytest-asyncio`; ≥ 70 % line coverage on critical logic.
+* `ruff --strict`, `mypy --strict` must pass; strict typing enforced gradually (--ignore-missing-imports allowed).
+* Docstrings (D1xx rules) may be skipped for internal or test code: `uv run ruff check --strict --ignore=D100,D101,D102,D103`
+* Run **mutmut** optionally; aim for ≥ 70 % mutants killed only if the codebase is test-critical.
+
+### Automatic Hook Installation
+> Run once per machine; every new `git init` or `git clone` inherits the hooks automatically.
+
+```bash
+# install pre-commit globally via uv
+uv pip install --progress=off pre-commit
+
+# set up a global Git template with commit & push hooks
+pre-commit init-templatedir ~/.git-template
+git config --global init.templateDir ~/.git-template
+```
+
+## 📊 Logging & Observability
+
+* Structured JSON logging with **structlog**; include `event`, `module`, `elapsed_ms`.
+* Expose a Prometheus metrics endpoint.
+
+## ⚡ Performance
+
+* Optimise only after profiling shows > 2 % of total CPU/time in a pure function.
+* Backend API SLO: **P95 latency ≤ 100 ms**; alert if breached 3 × within 15 min.
+
+## 🚨 Error Handling
+
+* Fail fast on bad input (`ValueError`, `TypeError`); raise domain-specific errors.
+* Catch broad exceptions only at process boundaries.
+* Fix root causes instead of layering fallbacks.
+
+## 🎯 General Engineering Principles
+
+* Prefer simple solutions; no fallback configs—fix the code.
+* Delete obsolete paths rather than maintain backward-compat shims.
+* Adopt new tech only when it fully replaces the old—then remove the old.
+* Avoid stubbing/fake data outside tests; never mock prod/dev data.
+* Do exactly what is requested; suggest enhancements separately. 
