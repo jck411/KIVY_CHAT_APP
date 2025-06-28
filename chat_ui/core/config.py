@@ -8,7 +8,7 @@ class Config:
     """Centralized configuration with environment variable support"""
     
     # Network settings
-    WEBSOCKET_URI = os.getenv("CHAT_WEBSOCKET_URI", "ws://localhost:8000/ws/chat")
+    WEBSOCKET_URI = os.getenv("CHAT_WEBSOCKET_URI", "ws://192.168.1.223:8000/ws/chat")
     CONNECTION_TIMEOUT = float(os.getenv("CHAT_CONNECTION_TIMEOUT", "30.0"))
     CONNECTION_TEST_TIMEOUT = float(os.getenv("CHAT_TEST_TIMEOUT", "5.0"))
     MAX_RETRIES = int(os.getenv("CHAT_MAX_RETRIES", "3"))
